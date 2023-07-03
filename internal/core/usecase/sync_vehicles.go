@@ -1,13 +1,14 @@
 package usecase
 
 import (
-	"fmt"
 	"context"
+	"fmt"
+
 	//"time"
 
 	"bitbucket.org/phoops/nurse/internal/core/entities"
-	"github.com/segmentio/kafka-go"
 	"github.com/pkg/errors"
+	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 )
 
@@ -20,9 +21,9 @@ type VehiclePersistor interface {
 }
 
 type SyncVehicles struct {
-	logger *zap.SugaredLogger
+	logger      *zap.SugaredLogger
 	kafkaReader *kafka.Reader
-	persistor VehiclePersistor
+	persistor   VehiclePersistor
 }
 
 func NewSyncVehicle(
@@ -30,7 +31,7 @@ func NewSyncVehicle(
 	kafkaReader *kafka.Reader,
 	persistor VehiclePersistor,
 ) (*SyncVehicles, error) {
-	if logger == nil || persistor == nil || kafkaReader == nil{
+	if logger == nil || persistor == nil || kafkaReader == nil {
 		return nil, errors.New("all parameters must be non-nil")
 	}
 	logger = logger.With("usecase", "SyncVehicles")
@@ -46,26 +47,20 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 	u.logger.Info("running vehicles synchronization")
 
 	for {
-        message, err := u.kafkaReader.ReadMessage(ctx)
-        if err != nil {
-            u.logger.Fatal(err)
-        }
-        fmt.Printf("Message: %s", string(message.Value))
-    }
+		message, err := u.kafkaReader.ReadMessage(ctx)
+		if err != nil {
+			u.logger.Errorw("can't read message", "error", err)
+			return errors.Wrap(err, "can't read stops")
+		}
+		u.logger.Debugw("messages received", "message", message)
+	}
 
-	// vs, err := u.fetcher.Getvs(...)
-	// if err != nil {
-	// 	u.logger.Errorw("can't read stops", "error", err, "bounding box", fmt.Sprintf("(%f,%f),(%f,%f)", minLon, minLat, maxLon, maxLat))
-	// 	return errors.Wrap(err, "can't read stops")
-	// }
-	// u.logger.Debugw("stops read", "fetched", len(stops))
-
-	// +++++++++++++++ create vehicles for testing +++++++++++++++
+	// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
 	// vehicles := []*entities.Vehicle{}
 	// for i := 1; i <= 100; i++ {
 	// 	v := &entities.Vehicle{
-	// 		Id:   fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
-	// 		Type: "Vehicle",
+	// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
+	// 		Type:        "Vehicle",
 	// 		VehicleType: "car",
 	// 		Description: "camera 1",
 	// 		Speed: entities.Speed{
@@ -74,11 +69,11 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 	// 		},
 	// 		Location: entities.Location{
 	// 			Value: entities.Point{
-	// 				Coordinates: []float64{43.463385, 11.877823},
+	// 				Coordinates: []float64{43.459137, 11.861667},
 	// 			},
 	// 			ObservedAt: time.Now(),
 	// 		},
-    // 		Heading: entities.Heading{
+	// 		Heading: entities.Heading{
 	// 			Value:      180,
 	// 			ObservedAt: time.Now(),
 	// 		},

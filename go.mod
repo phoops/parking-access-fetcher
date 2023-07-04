@@ -3,6 +3,7 @@ module bitbucket.org/phoops/nurse
 go 1.20
 
 require (
+	github.com/google/uuid v1.3.0
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect

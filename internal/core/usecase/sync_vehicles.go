@@ -2,9 +2,12 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	//"time"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"bitbucket.org/phoops/nurse/internal/core/entities"
 	"github.com/pkg/errors"
@@ -12,24 +15,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// type vsFetcher interface {
-// 	Getvs(ctx context.Context) ([]*entities.v, error)
-// }
-
 type VehiclePersistor interface {
 	WriteVehiclesBatch(ctx context.Context, vs []*entities.Vehicle) error
 }
 
 type SyncVehicles struct {
-	logger      *zap.SugaredLogger
-	kafkaReader *kafka.Reader
-	persistor   VehiclePersistor
+	logger              *zap.SugaredLogger
+	kafkaReader         *kafka.Reader
+	persistor           VehiclePersistor
+	defaultVehicleSpeed int
 }
 
 func NewSyncVehicle(
 	logger *zap.SugaredLogger,
 	kafkaReader *kafka.Reader,
 	persistor VehiclePersistor,
+	defaultVehicleSpeed int,
 ) (*SyncVehicles, error) {
 	if logger == nil || persistor == nil || kafkaReader == nil {
 		return nil, errors.New("all parameters must be non-nil")
@@ -40,19 +41,90 @@ func NewSyncVehicle(
 		logger,
 		kafkaReader,
 		persistor,
+		defaultVehicleSpeed,
+	}, nil
+}
+
+func (u *SyncVehicles) presenceEvent2Vehicle(pe entities.PresenceEvent) (*entities.Vehicle, error) {
+
+	var coordinates []float64
+	switch pe.ParkingID {
+	case "atam-off-street-parking-cadorna":
+		coordinates = []float64{43.465313, 11.872549}
+	case "atam-off-street-parking-san-donato":
+		coordinates = []float64{43.462014, 11.864127}
+	case "atam-off-street-parking-baldaccio":
+		coordinates = []float64{43.465313, 11.872549}
+	case "atam-off-street-parking-mecenate":
+		coordinates = []float64{43.455705, 11.880767}
+	default:
+		u.logger.Errorw("parking ID not found", "parkingID", pe.ParkingID)
+		return nil, errors.New("parking ID not found")
+	}
+
+	invertedCoordinates := []float64{coordinates[1], coordinates[0]} // beacause coordinates in MT are inverted (check readme)
+
+	return &entities.Vehicle{
+		Id:          pe.ID.String(),
+		Type:        "Vehicle",
+		VehicleType: "Car",
+		Speed: entities.Speed{
+			Value:      u.defaultVehicleSpeed,
+			ObservedAt: pe.DetectedAt,
+		},
+		Location: entities.Location{
+			Value: entities.Point{
+				//Coordinates: coordinates,
+				Coordinates: invertedCoordinates,
+			},
+			ObservedAt: pe.DetectedAt,
+		},
+		Description: fmt.Sprintf("Parking: %s, Gate: %s", pe.ParkingID, pe.GateID),
+		Heading: entities.Heading{
+			Value:      180, //default value. Not used
+			ObservedAt: pe.DetectedAt,
+		},
 	}, nil
 }
 
 func (u *SyncVehicles) Execute(ctx context.Context) error {
 	u.logger.Info("running vehicles synchronization")
 
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
+
 	for {
-		message, err := u.kafkaReader.ReadMessage(ctx)
-		if err != nil {
-			u.logger.Errorw("can't read message", "error", err)
-			return errors.Wrap(err, "can't read stops")
+		select {
+		case <-stopChan:
+			u.kafkaReader.Close()
+			u.logger.Info("stopping server gracefully")
+			return nil
+		default:
+			message, err := u.kafkaReader.ReadMessage(ctx)
+			if err != nil {
+				u.logger.Errorw("can't read message", "error", err)
+				return errors.Wrap(err, "can't read vehicle message")
+			}
+			var presenceEvent entities.PresenceEvent
+			err = json.Unmarshal(message.Value, &presenceEvent)
+			if err != nil {
+				u.logger.Errorw("can't unmarshal vehicle message", "error", err)
+				return errors.Wrap(err, "can't unmarshal vehicle message")
+			}
+
+			u.logger.Debugw("message received", "message", presenceEvent)
+			vehicle, err := u.presenceEvent2Vehicle(presenceEvent)
+			if err != nil {
+				continue
+			}
+			// err = u.persistor.WriteVehiclesBatch(ctx, []*entities.Vehicle{vehicle})	//TODO do batch
+			// if err != nil {
+			// 	u.logger.Errorw("can't write vehicle", "error", err)
+			// 	return errors.Wrap(err, "can't write vehicle")
+			// }
+			u.logger.Infow("vehicle written", "vehicle", vehicle)
+
 		}
-		u.logger.Debugw("messages received", "message", message)
 	}
 
 	// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
@@ -80,13 +152,4 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 	// 	}
 	// 	vehicles = append(vehicles, v)
 	// }
-
-	// +++++++++++++++ write vehicles on broker +++++++++++++++ //TODO uncomment
-	// err := u.persistor.WriteVehiclesBatch(ctx, vehicles)
-	// if err != nil {
-	// 	u.logger.Errorw("can't write vehicles", "error", err)
-	// 	return errors.Wrap(err, "can't write vehicles")
-	// }
-	// u.logger.Infow("vehicles written", "size", len(vehicles))
-	// return nil
 }

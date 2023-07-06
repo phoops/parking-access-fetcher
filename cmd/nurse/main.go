@@ -32,7 +32,7 @@ func main() {
 	kafkaReader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:       []string{conf.KafkaURL},
 		Topic:         conf.KafkaTopic,
-		//GroupID:       conf.KafkaConsumerGroup,
+		GroupID:       conf.KafkaConsumerGroup,
 		MinBytes:      1,
 		MaxBytes:      10e6,                     // 10 MB
 		RetentionTime: time.Hour * 24 * 365 * 5, // five years
@@ -55,6 +55,7 @@ func main() {
 		kafkaReader,
 		contextBrokerClient,
 		conf.DefaultVehicleSpeed,
+		conf.KafkaTopic,
 	)
 	if err != nil {
 		errMsg := errors.Wrap(err, "cannot instantiate Nurse!").Error()

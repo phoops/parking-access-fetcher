@@ -24,6 +24,7 @@ type SyncVehicles struct {
 	kafkaReader         *kafka.Reader
 	persistor           VehiclePersistor
 	defaultVehicleSpeed int
+	kafkaTopic          string
 }
 
 func NewSyncVehicle(
@@ -31,6 +32,7 @@ func NewSyncVehicle(
 	kafkaReader *kafka.Reader,
 	persistor VehiclePersistor,
 	defaultVehicleSpeed int,
+	kafkaTopic string,
 ) (*SyncVehicles, error) {
 	if logger == nil || persistor == nil || kafkaReader == nil {
 		return nil, errors.New("all parameters must be non-nil")
@@ -42,6 +44,7 @@ func NewSyncVehicle(
 		kafkaReader,
 		persistor,
 		defaultVehicleSpeed,
+		kafkaTopic,
 	}, nil
 }
 
@@ -92,12 +95,18 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
+	initialOffset := u.kafkaReader.Stats().Offset
 
+	vehicles := []*entities.Vehicle{}
+
+L: //label used to break the for loop
 	for {
 		select {
 		case <-stopChan:
-			u.kafkaReader.Close()
 			u.logger.Info("stopping server gracefully")
+			u.kafkaReader.SetOffset(initialOffset)
+			u.logger.Info("kafka reader offset resetted")
+			u.kafkaReader.Close()
 			return nil
 		default:
 			message, err := u.kafkaReader.ReadMessage(ctx)
@@ -105,6 +114,7 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 				u.logger.Errorw("can't read message", "error", err)
 				return errors.Wrap(err, "can't read vehicle message")
 			}
+
 			var presenceEvent entities.PresenceEvent
 			err = json.Unmarshal(message.Value, &presenceEvent)
 			if err != nil {
@@ -113,43 +123,53 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 			}
 
 			u.logger.Debugw("message received", "message", presenceEvent)
-			vehicle, err := u.presenceEvent2Vehicle(presenceEvent)
+			v, err := u.presenceEvent2Vehicle(presenceEvent)
 			if err != nil {
-				continue
+				u.logger.Errorw("can't convert presence event to vehicle", "error", err)
+				if u.kafkaReader.Lag() > 0 {
+					continue
+				}
 			}
-			// err = u.persistor.WriteVehiclesBatch(ctx, []*entities.Vehicle{vehicle})	//TODO do batch
-			// if err != nil {
-			// 	u.logger.Errorw("can't write vehicle", "error", err)
-			// 	return errors.Wrap(err, "can't write vehicle")
-			// }
-			u.logger.Infow("vehicle written", "vehicle", vehicle)
+			vehicles = append(vehicles, v)
 
+			if u.kafkaReader.Lag() == 0 {
+				u.kafkaReader.Close()
+				break L
+			}
 		}
 	}
-
-	// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
-	// vehicles := []*entities.Vehicle{}
-	// for i := 1; i <= 100; i++ {
-	// 	v := &entities.Vehicle{
-	// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
-	// 		Type:        "Vehicle",
-	// 		VehicleType: "car",
-	// 		Description: "camera 1",
-	// 		Speed: entities.Speed{
-	// 			Value:      50,
-	// 			ObservedAt: time.Now(),
-	// 		},
-	// 		Location: entities.Location{
-	// 			Value: entities.Point{
-	// 				Coordinates: []float64{43.459137, 11.861667},
-	// 			},
-	// 			ObservedAt: time.Now(),
-	// 		},
-	// 		Heading: entities.Heading{
-	// 			Value:      180,
-	// 			ObservedAt: time.Now(),
-	// 		},
-	// 	}
-	// 	vehicles = append(vehicles, v)
-	// }
+	
+	err := u.persistor.WriteVehiclesBatch(ctx, vehicles)
+	if err != nil {
+		u.logger.Errorw("can't write vehicles", "error", err)
+		return errors.Wrap(err, "can't write vehicles")
+	}
+	u.logger.Infow("vehicles written", "count", len(vehicles))
+	return nil
 }
+
+// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
+		// vehicles := []*entities.Vehicle{}
+		// for i := 1; i <= 100; i++ {
+		// 	v := &entities.Vehicle{
+		// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
+		// 		Type:        "Vehicle",
+		// 		VehicleType: "car",
+		// 		Description: "camera 1",
+		// 		Speed: entities.Speed{
+		// 			Value:      50,
+		// 			ObservedAt: time.Now(),
+		// 		},
+		// 		Location: entities.Location{
+		// 			Value: entities.Point{
+		// 				Coordinates: []float64{43.459137, 11.861667},
+		// 			},
+		// 			ObservedAt: time.Now(),
+		// 		},
+		// 		Heading: entities.Heading{
+		// 			Value:      180,
+		// 			ObservedAt: time.Now(),
+		// 		},
+		// 	}
+		// 	vehicles = append(vehicles, v)
+		// }

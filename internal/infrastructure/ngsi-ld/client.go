@@ -38,7 +38,6 @@ func NewClient(logger *zap.SugaredLogger, baseURL string) (*Client, error) {
 	}, nil
 }
 
-// TODO Vehicle non deve essere dato in ingresso ma ci dovrebbe essere il vehicle vecchio da convertire?
 func (c *Client) WriteVehiclesBatch(ctx context.Context, vehicles []*entities.Vehicle) error {
 	payload := []*client.EntityWithContext{}
 	for _, v := range vehicles {
@@ -51,8 +50,6 @@ func (c *Client) WriteVehiclesBatch(ctx context.Context, vehicles []*entities.Ve
 			LdCtx:  &defaulContext,
 			Entity: e,
 		})
-
-		c.logger.Debugw("added entity to batch", "id", e.ID, "type", e.Type, "speed", e.Properties["speed"].Value, "vehicleType", e.Properties["vehicleType"].Value, "location", e.Location.Value.Point)
 	}
 
 	err := c.ngsiLdClient.BatchUpsertEntities(ctx, payload, client.UpsertSetUpdateMode)

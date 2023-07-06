@@ -136,7 +136,15 @@ L: //label used to break the for loop
 			}
 			vehicles = append(vehicles, v)
 
-			if u.kafkaReader.Lag() == 0 {
+			lag, err := u.kafkaReader.ReadLag(ctx)
+
+			if err != nil {
+				u.logger.Errorw("can't read kafka lag", "error", err)
+				return errors.Wrap(err, "can't read kafka lag")
+			}
+
+			u.logger.Debugw("kafka lag", "lag", lag)
+			if lag == 0 {
 				u.kafkaReader.Close()
 				break L
 			}

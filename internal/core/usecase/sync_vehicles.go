@@ -104,8 +104,12 @@ L: //label used to break the for loop
 		select {
 		case <-stopChan:
 			u.logger.Info("stopping server gracefully")
-			u.kafkaReader.SetOffset(initialOffset)
-			u.logger.Info("kafka reader offset resetted")
+			err := u.kafkaReader.SetOffset(initialOffset)
+			if err != nil {
+				u.logger.Errorw("can't reset kafka reader offset", "error", err)
+			} else {
+				u.logger.Info("kafka reader offset resetted")
+			}
 			u.kafkaReader.Close()
 			return nil
 		default:
@@ -138,7 +142,7 @@ L: //label used to break the for loop
 			}
 		}
 	}
-	
+
 	err := u.persistor.WriteVehiclesBatch(ctx, vehicles)
 	if err != nil {
 		u.logger.Errorw("can't write vehicles", "error", err)
@@ -149,27 +153,27 @@ L: //label used to break the for loop
 }
 
 // +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
-		// vehicles := []*entities.Vehicle{}
-		// for i := 1; i <= 100; i++ {
-		// 	v := &entities.Vehicle{
-		// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
-		// 		Type:        "Vehicle",
-		// 		VehicleType: "car",
-		// 		Description: "camera 1",
-		// 		Speed: entities.Speed{
-		// 			Value:      50,
-		// 			ObservedAt: time.Now(),
-		// 		},
-		// 		Location: entities.Location{
-		// 			Value: entities.Point{
-		// 				Coordinates: []float64{43.459137, 11.861667},
-		// 			},
-		// 			ObservedAt: time.Now(),
-		// 		},
-		// 		Heading: entities.Heading{
-		// 			Value:      180,
-		// 			ObservedAt: time.Now(),
-		// 		},
-		// 	}
-		// 	vehicles = append(vehicles, v)
-		// }
+// vehicles := []*entities.Vehicle{}
+// for i := 1; i <= 100; i++ {
+// 	v := &entities.Vehicle{
+// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
+// 		Type:        "Vehicle",
+// 		VehicleType: "car",
+// 		Description: "camera 1",
+// 		Speed: entities.Speed{
+// 			Value:      50,
+// 			ObservedAt: time.Now(),
+// 		},
+// 		Location: entities.Location{
+// 			Value: entities.Point{
+// 				Coordinates: []float64{43.459137, 11.861667},
+// 			},
+// 			ObservedAt: time.Now(),
+// 		},
+// 		Heading: entities.Heading{
+// 			Value:      180,
+// 			ObservedAt: time.Now(),
+// 		},
+// 	}
+// 	vehicles = append(vehicles, v)
+// }

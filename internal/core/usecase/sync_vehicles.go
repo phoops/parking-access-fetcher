@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"os"
 	"os/signal"
 	"syscall"
@@ -95,27 +94,18 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
-	initialOffset := u.kafkaReader.Stats().Offset
+	
 
-	vehicles := []*entities.Vehicle{}
-
-L: //label used to break the for loop
 	for {
 		select {
 		case <-stopChan:
 			u.logger.Info("stopping server gracefully")
-			err := u.kafkaReader.SetOffset(initialOffset)
-			if err != nil {
-				u.logger.Errorw("can't reset kafka reader offset", "error", err)
-			} else {
-				u.logger.Info("kafka reader offset resetted")
-			}
 			u.kafkaReader.Close()
 			return nil
 		default:
 			message, err := u.kafkaReader.ReadMessage(ctx)
 			if err != nil {
-				u.logger.Errorw("can't read message", "error", err)
+				u.logger.Errorw("can't read vehicle message", "error", err)
 				return errors.Wrap(err, "can't read vehicle message")
 			}
 
@@ -134,54 +124,44 @@ L: //label used to break the for loop
 					continue
 				}
 			}
-			vehicles = append(vehicles, v)
 
-			lag, err := u.kafkaReader.ReadLag(ctx)
-
+		
+			err = u.persistor.WriteVehiclesBatch(ctx, []*entities.Vehicle{v})
 			if err != nil {
-				u.logger.Errorw("can't read kafka lag", "error", err)
-				return errors.Wrap(err, "can't read kafka lag")
+				u.logger.Errorw("can't write vehicle", "error", err)
+				return errors.Wrap(err, "can't write vehicle")
 			}
-
-			u.logger.Debugw("kafka lag", "lag", lag)
-			if lag == 0 {
-				u.kafkaReader.Close()
-				break L
-			}
+			u.logger.Infow("vehicle written", "vehicle", v)
 		}
+			
+			
 	}
 
-	err := u.persistor.WriteVehiclesBatch(ctx, vehicles)
-	if err != nil {
-		u.logger.Errorw("can't write vehicles", "error", err)
-		return errors.Wrap(err, "can't write vehicles")
-	}
-	u.logger.Infow("vehicles written", "count", len(vehicles))
-	return nil
 }
 
-// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
-// vehicles := []*entities.Vehicle{}
-// for i := 1; i <= 100; i++ {
-// 	v := &entities.Vehicle{
-// 		Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
-// 		Type:        "Vehicle",
-// 		VehicleType: "car",
-// 		Description: "camera 1",
-// 		Speed: entities.Speed{
-// 			Value:      50,
-// 			ObservedAt: time.Now(),
-// 		},
-// 		Location: entities.Location{
-// 			Value: entities.Point{
-// 				Coordinates: []float64{43.459137, 11.861667},
-// 			},
-// 			ObservedAt: time.Now(),
-// 		},
-// 		Heading: entities.Heading{
-// 			Value:      180,
-// 			ObservedAt: time.Now(),
-// 		},
-// 	}
-// 	vehicles = append(vehicles, v)
-// }
+	// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
+	// vehicles := []*entities.Vehicle{}
+	//
+	//	for i := 1; i <= 100; i++ {
+	//		v := &entities.Vehicle{
+	//			Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
+	//			Type:        "Vehicle",
+	//			VehicleType: "car",
+	//			Description: "camera 1",
+	//			Speed: entities.Speed{
+	//				Value:      50,
+	//				ObservedAt: time.Now(),
+	//			},
+	//			Location: entities.Location{
+	//				Value: entities.Point{
+	//					Coordinates: []float64{43.459137, 11.861667},
+	//				},
+	//				ObservedAt: time.Now(),
+	//			},
+	//			Heading: entities.Heading{
+	//				Value:      180,
+	//				ObservedAt: time.Now(),
+	//			},
+	//		}
+	//		vehicles = append(vehicles, v)
+	//	}

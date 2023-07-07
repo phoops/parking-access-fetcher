@@ -64,7 +64,7 @@ func (u *SyncVehicles) presenceEvent2Vehicle(pe entities.PresenceEvent) (*entiti
 		return nil, errors.New("parking ID not found")
 	}
 
-	invertedCoordinates := []float64{coordinates[1], coordinates[0]} // beacause coordinates in MT are inverted (check readme)
+	//invertedCoordinates := []float64{coordinates[1], coordinates[0]} // beacause coordinates in MT are inverted (check readme)
 
 	return &entities.Vehicle{
 		Id:          pe.ID.String(),
@@ -76,8 +76,8 @@ func (u *SyncVehicles) presenceEvent2Vehicle(pe entities.PresenceEvent) (*entiti
 		},
 		Location: entities.Location{
 			Value: entities.Point{
-				//Coordinates: coordinates,
-				Coordinates: invertedCoordinates,
+				Coordinates: coordinates,
+				//Coordinates: invertedCoordinates,
 			},
 			ObservedAt: pe.DetectedAt,
 		},

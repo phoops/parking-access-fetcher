@@ -64,8 +64,6 @@ func (u *SyncVehicles) presenceEvent2Vehicle(pe entities.PresenceEvent) (*entiti
 		return nil, errors.New("parking ID not found")
 	}
 
-	//invertedCoordinates := []float64{coordinates[1], coordinates[0]} // beacause coordinates in MT are inverted (check readme)
-
 	return &entities.Vehicle{
 		Id:          pe.ID.String(),
 		Type:        "Vehicle",
@@ -77,7 +75,6 @@ func (u *SyncVehicles) presenceEvent2Vehicle(pe entities.PresenceEvent) (*entiti
 		Location: entities.Location{
 			Value: entities.Point{
 				Coordinates: coordinates,
-				//Coordinates: invertedCoordinates,
 			},
 			ObservedAt: pe.DetectedAt,
 		},
@@ -138,30 +135,3 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 	}
 
 }
-
-	// +++++++++++++++ create mockup vehicle data for testing +++++++++++++++
-	// vehicles := []*entities.Vehicle{}
-	//
-	//	for i := 1; i <= 100; i++ {
-	//		v := &entities.Vehicle{
-	//			Id:          fmt.Sprintf("%s%03d", "urn:ngsi-ld:Vehicle:", i),
-	//			Type:        "Vehicle",
-	//			VehicleType: "car",
-	//			Description: "camera 1",
-	//			Speed: entities.Speed{
-	//				Value:      50,
-	//				ObservedAt: time.Now(),
-	//			},
-	//			Location: entities.Location{
-	//				Value: entities.Point{
-	//					Coordinates: []float64{43.459137, 11.861667},
-	//				},
-	//				ObservedAt: time.Now(),
-	//			},
-	//			Heading: entities.Heading{
-	//				Value:      180,
-	//				ObservedAt: time.Now(),
-	//			},
-	//		}
-	//		vehicles = append(vehicles, v)
-	//	}

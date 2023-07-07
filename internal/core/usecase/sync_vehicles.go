@@ -128,7 +128,7 @@ func (u *SyncVehicles) Execute(ctx context.Context) error {
 				u.logger.Errorw("can't write vehicle", "error", err)
 				return errors.Wrap(err, "can't write vehicle")
 			}
-			u.logger.Infow("vehicle written", "vehicle", v)
+			u.logger.Infow("vehicle written. Note: coordinates will be inverted (check readme) ", "vehicle", v)
 		}
 			
 			
